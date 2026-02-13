@@ -1,0 +1,12 @@
+[project]
+name = "latacc-medevac"
+version = "0.1.0"
+description = "LATACC MEDEVAC multi-agent system for NATO medical operations"
+requires-python = ">=3.12"
+authors = [{name = "Martinez Agullo, Pablo", email = "pablo.martinez.agullo@gmail.com"}]
+license = "GPL-3.0-or-later"
+readme = "README.md"
+
+
+[tool.uv.workspace]
+members = ["packages/*"]
