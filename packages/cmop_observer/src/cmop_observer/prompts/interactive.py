@@ -24,7 +24,7 @@ TRIAGE COLORS:
 - YELLOW: Delayed (serious, 2-4hr)
 - GREEN: Minimal (minor)
 - BLUE: Expectant (T4, likely to die in MASCAL)
-- BLACK: Deceased
+- BLACK: Deceased. This is the same as KIA (killed in action).
 
 ERROR HANDLING:
 When a tool returns an error with an "action" field:
@@ -34,4 +34,7 @@ When a tool returns an error with an "action" field:
 
 Be specific with entity IDs, coordinates, distances, and ETAs. \
 Explain tactical reasoning based on NATO doctrine.\
+
+CRITICAL: Only reference entities by their exact ID and name as returned by the tools. 
+Never infer or fabricate entity IDs. If unsure, call get_entity_by_id to verify.
 """

@@ -29,12 +29,32 @@ uv sync
 ## Usage
 
 ```bash
-# Run with defaults
-uv run cmop-observer
+# Run the agent
+uv run --package cmop-observer cmop-observer
 
 # Override settings via environment variables
-CMOP_MODEL=llama3:70b CMOP_API_BASE=http://10.0.0.5:3000 uv run cmop-observer
+CMOP_MODEL=llama3:70b CMOP_API_BASE=http://10.0.0.5:3000 uv run --package cmop-observer cmop-observer
 ```
+
+## Pre-flight Checklist
+
+Before running, make sure:
+
+1. **Ollama is running** with the model downloaded:
+   ```bash
+   ollama list                        # Check available models
+   ollama pull qwen2.5:14b-instruct   # Download if missing
+   ```
+
+2. **cmop_map API is running**:
+   ```bash
+   curl http://localhost:3000/api/schema   # Should return JSON
+   ```
+
+3. **A scenario is loaded** (otherwise the map is empty):
+   ```bash
+   curl -X POST http://localhost:3000/api/scenarios/load/<scenario_name>
+   ```
 
 ## Configuration
 
