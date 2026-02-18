@@ -33,7 +33,7 @@ uv sync
 uv run --package cmop-observer cmop-observer
 
 # Override settings via environment variables
-CMOP_MODEL=llama3:70b CMOP_API_BASE=http://10.0.0.5:3000 uv run --package cmop-observer cmop-observer
+#CMOP_MODEL=llama3:70b CMOP_API_BASE=http://10.0.0.5:3000 uv run --package cmop-observer cmop-observer
 ```
 
 ## Pre-flight Checklist
