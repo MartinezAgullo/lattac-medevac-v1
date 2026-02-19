@@ -1,15 +1,20 @@
 """
-Tool registry with automatic OpenAI-compatible schema generation.
+latacc_common/tools/registry.py
 
-Eliminates the need to manually maintain JSON schemas alongside
-Python function definitions. Schemas are derived from type hints
-and docstrings at registration time.
+Tool registry with automatic OpenAI-compatible schema generation.
+Instrumented with OpenTelemetry: each tool execution creates a span
+with arguments, response payload, and duration.
 """
 
 import inspect
 import logging
+import time
 from enum import StrEnum
 from typing import Any, Callable, get_type_hints
+
+from opentelemetry import trace
+
+from latacc_common.tracing import record_error, truncate_json
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +29,11 @@ _TYPE_MAP: dict[type, str] = {
 
 def _json_schema_type(hint: type) -> dict[str, Any]:
     """Convert a Python type hint to a JSON Schema property."""
-    # Handle StrEnum subclasses → string with enum values
     if isinstance(hint, type) and issubclass(hint, StrEnum):
         return {
             "type": "string",
             "enum": [e.value for e in hint],
         }
-
     return {"type": _TYPE_MAP.get(hint, "string")}
 
 
@@ -52,7 +55,6 @@ def _parse_docstring_params(docstring: str) -> dict[str, str]:
             continue
         if in_args:
             if stripped and not stripped.startswith("-") and ":" not in stripped:
-                # Left the Args section
                 break
             if ":" in stripped:
                 name, _, desc = stripped.lstrip("- ").partition(":")
@@ -65,21 +67,17 @@ class ToolRegistry:
     """
     Central registry for agent tools with auto-schema generation.
 
-    Usage:
-        registry = ToolRegistry()
-
-        @registry.register
-        async def get_entity_by_id(entity_id: int) -> dict:
-            '''Get single entity by numeric ID.'''
-            ...
-
-        # Schemas are auto-generated for Ollama/OpenAI tool calling
-        schemas = registry.schemas
+    Each tool execution is traced via OpenTelemetry with:
+    - tool.name, tool.arguments (as span attributes)
+    - tool.response (truncated JSON)
+    - tool.duration_ms
+    - tool.success (bool)
     """
 
     def __init__(self) -> None:
         self._tools: dict[str, Callable] = {}
         self._schemas: list[dict[str, Any]] = []
+        self._tracer = trace.get_tracer("latacc.tools")
 
     def register(self, func: Callable) -> Callable:
         """Register a tool function and auto-generate its OpenAI schema."""
@@ -117,7 +115,6 @@ class ToolRegistry:
 
             properties[param_name] = prop
 
-        # Use first line of docstring as tool description
         description = docstring.split("\n")[0] if docstring else func.__name__
 
         return {
@@ -145,17 +142,10 @@ class ToolRegistry:
 
     async def execute(self, name: str, arguments: dict[str, Any]) -> Any:
         """
-        Execute a registered tool by name.
+        Execute a registered tool by name, wrapped in an OTel span.
 
-        Args:
-            name: Tool function name.
-            arguments: Keyword arguments to pass to the tool.
-
-        Returns:
-            Tool result (typically an ApiResponse-compatible dict).
-
-        Raises:
-            KeyError: If tool name is not registered.
+        The span records: tool name, arguments, response (truncated),
+        duration in ms, and success/error status.
         """
         if name not in self._tools:
             raise KeyError(
@@ -163,23 +153,59 @@ class ToolRegistry:
             )
 
         func = self._tools[name]
-        logger.info("Executing tool: %s(%s)", name, arguments)
 
-        try:
-            return await func(**arguments)
-        except TypeError as exc:
-            # Bad arguments from the LLM
-            return {
-                "success": False,
-                "error": "INVALID_ARGUMENTS",
-                "message": f"Tool '{name}' received invalid arguments: {exc}",
-                "action": "correct",
-            }
-        except Exception as exc:
-            logger.exception("Tool '%s' failed", name)
-            return {
-                "success": False,
-                "error": "TOOL_EXECUTION_ERROR",
-                "message": f"Tool '{name}' failed: {type(exc).__name__}: {exc}",
-                "action": "retry",
-            }
+        with self._tracer.start_as_current_span(f"tool:{name}") as span:
+            span.set_attribute("tool.name", name)
+            span.set_attribute("tool.arguments", truncate_json(arguments))
+
+            logger.info("Executing tool: %s(%s)", name, arguments)
+            start = time.perf_counter()
+
+            try:
+                result = await func(**arguments)
+                elapsed_ms = (time.perf_counter() - start) * 1000
+
+                span.set_attribute("tool.success", True)
+                span.set_attribute("tool.duration_ms", round(elapsed_ms, 1))
+                span.set_attribute("tool.response", truncate_json(result))
+
+                # Log response size for debugging context window issues
+                response_chars = len(
+                    truncate_json(result, max_chars=999_999)
+                )
+                span.set_attribute("tool.response_chars", response_chars)
+                logger.info(
+                    "Tool %s completed in %.0fms (%d chars response)",
+                    name,
+                    elapsed_ms,
+                    response_chars,
+                )
+
+                return result
+
+            except TypeError as exc:
+                elapsed_ms = (time.perf_counter() - start) * 1000
+                span.set_attribute("tool.success", False)
+                span.set_attribute("tool.duration_ms", round(elapsed_ms, 1))
+                record_error(span, exc)
+
+                return {
+                    "success": False,
+                    "error": "INVALID_ARGUMENTS",
+                    "message": f"Tool '{name}' received invalid arguments: {exc}",
+                    "action": "correct",
+                }
+
+            except Exception as exc:
+                elapsed_ms = (time.perf_counter() - start) * 1000
+                span.set_attribute("tool.success", False)
+                span.set_attribute("tool.duration_ms", round(elapsed_ms, 1))
+                record_error(span, exc)
+                logger.exception("Tool '%s' failed", name)
+
+                return {
+                    "success": False,
+                    "error": "TOOL_EXECUTION_ERROR",
+                    "message": f"Tool '{name}' failed: {type(exc).__name__}: {exc}",
+                    "action": "retry",
+                }

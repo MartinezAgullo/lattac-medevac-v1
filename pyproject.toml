@@ -7,6 +7,17 @@ authors = [{name = "Martinez Agullo, Pablo", email = "pablo.martinez.agullo@gmai
 license = "GPL-3.0-or-later"
 readme = "README.md"
 
+dependencies = [
+    "cmop-observer",
+    "latacc-common",
+    "opentelemetry-api>=1.39.1",
+    "opentelemetry-exporter-otlp>=1.39.1",
+    "opentelemetry-sdk>=1.39.1",
+]
 
 [tool.uv.workspace]
 members = ["packages/*"]
+
+[tool.uv.sources]
+cmop-observer = { workspace = true }
+latacc-common = { workspace = true }

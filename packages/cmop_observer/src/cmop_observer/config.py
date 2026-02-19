@@ -18,10 +18,15 @@ class Settings(BaseSettings):
     request_timeout: float = 30.0
 
     # Ollama / LLM
-    model: str = "qwen2.5:14b-instruct"
+    model: str = "qwen3:14b" #"qwen3:30b-a3b"
     ollama_host: str = "http://localhost:11434"
 
     # Agent behaviour
     max_iterations: int = 15
+
+    # Tracing (OTel → Jaeger)
+    otlp_endpoint: str = "http://localhost:4317"
+
+
 
     model_config = {"env_prefix": "CMOP_"}

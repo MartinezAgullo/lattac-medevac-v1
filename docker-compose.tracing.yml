@@ -1,0 +1,11 @@
+services:
+  jaeger:
+    image: jaegertracing/jaeger:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC (traces from app)
+      - "4318:4318"     # OTLP HTTP (alternative)
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    restart: unless-stopped

@@ -2,8 +2,8 @@
 cmop_observer/__main__.py
 
 Entry point for the CMOP Observer Agent.
-Wires all dependencies and runs observation + interactive session
-with a shared message history.
+Wires all dependencies, initialises OTel tracing, and runs
+observation + interactive session with a shared message history.
 """
 
 import asyncio
@@ -14,9 +14,10 @@ from ollama import AsyncClient
 from cmop_observer.agent import CMOPObserverAgent
 from cmop_observer.api.client import CMOPClient
 from cmop_observer.config import Settings
-from cmop_observer.prompts.system import SYSTEM_PROMPT
+from cmop_observer.prompts import SYSTEM_PROMPT
 from cmop_observer.tools import register_basic_tools, register_medical_tools
 from latacc_common.tools import ToolRegistry
+from latacc_common.tracing import init_tracing
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,6 +29,12 @@ logger = logging.getLogger(__name__)
 async def run() -> None:
     """Bootstrap and run the CMOP Observer Agent."""
     settings = Settings()
+
+    # Initialise OTel tracing (exports to Jaeger via OTLP/gRPC)
+    init_tracing(
+        service_name="cmop-observer",
+        otlp_endpoint=settings.otlp_endpoint,
+    )
 
     logger.info("Starting CMOP Observer Agent (model=%s)", settings.model)
     logger.info("CMOP API: %s", settings.api_base)

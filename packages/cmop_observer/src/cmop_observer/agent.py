@@ -166,7 +166,7 @@ class CMOPObserverAgent:
 
         while True:
             try:
-                user_input = input("You: ").strip()
+                user_input = input("👨🏻‍⚕️ You: ").strip()
             except (EOFError, KeyboardInterrupt):
                 print("\n👋 Exiting.")
                 break
